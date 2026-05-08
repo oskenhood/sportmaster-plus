@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>СпортМастер Плюс — ИС Продаж</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --surface: #111318;
+      --card: #161b24;
+      --border: #1e2533;
+      --accent: #e8ff3a;
+      --accent2: #3affd4;
+      --text: #e8edf5;
+      --muted: #6b7a96;
+      --danger: #ff4d4d;
+      --success: #3affd4;
+      --font-display: 'Bebas Neue', sans-serif;
+      --font-body: 'Manrope', sans-serif;
+      --radius: 10px;
+      --transition: 0.2s cubic-bezier(.4,0,.2,1);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ──────── NOISE OVERLAY ──────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: .35;
+    }
+
+    /* ──────── SIDEBAR NAV ──────── */
+    .sidebar {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 0;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo span {
+      font-family: var(--font-display);
+      font-size: 22px;
+      letter-spacing: 1px;
+      color: var(--accent);
+      display: block;
+    }
+    .sidebar-logo small {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: var(--transition);
+      font-size: 13px;
+      font-weight: 500;
+      border-left: 3px solid transparent;
+      text-decoration: none;
+    }
+    .nav-item:hover, .nav-item.active {
+      color: var(--text);
+      background: rgba(232,255,58,.05);
+      border-left-color: var(--accent);
+    }
+    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .nav-section {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      padding: 16px 20px 4px;
+      font-weight: 600;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .db-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+    .db-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background .5s;
+    }
+    .db-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .db-dot.error { background: var(--danger); }
+
+    /* ──────── MAIN CONTENT ──────── */
+    .main {
+      margin-left: 220px;
+      min-height: 100vh;
+    }
+    .topbar {
+      position: sticky; top: 0;
+      background: rgba(10,12,16,.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 50;
+    }
+    .page-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: var(--transition);
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #0a0c10;
+    }
+    .btn-primary:hover { background: #d4eb2a; transform: translateY(-1px); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { opacity: .85; }
+
+    .content { padding: 28px 32px; }
+
+    /* ──────── SECTION ──────── */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ──────── DASHBOARD STATS ──────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: var(--transition);
+    }
+    .stat-card:hover { border-color: rgba(232,255,58,.3); transform: translateY(-2px); }
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--accent);
+      opacity: 0;
+      transition: var(--transition);
+    }
+    .stat-card:hover::after { opacity: 1; }
+    .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 10px; }
+    .stat-value { font-family: var(--font-display); font-size: 32px; color: var(--accent); line-height: 1; }
+    .stat-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .stat-trend { color: var(--success); font-size: 12px; font-weight: 600; }
+
+    /* ──────── CRUD TABLE ──────── */
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      flex: 1;
+      max-width: 320px;
+    }
+    .search-box input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 13px;
+      width: 100%;
+    }
+    .search-box input::placeholder { color: var(--muted); }
+    .table-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr {
+      background: rgba(232,255,58,.05);
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    td {
+      padding: 12px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(30,37,51,.6);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr { transition: var(--transition); }
+    tbody tr:hover { background: rgba(255,255,255,.02); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-green { background: rgba(58,255,212,.12); color: var(--success); }
+    .badge-yellow { background: rgba(232,255,58,.12); color: var(--accent); }
+    .badge-red { background: rgba(255,77,77,.12); color: var(--danger); }
+    .badge-blue { background: rgba(58,148,255,.12); color: #3a94ff; }
+    .row-actions { display: flex; gap: 6px; }
+    .icon-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      width: 28px; height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 13px;
+      transition: var(--transition);
+    }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .icon-btn.del:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ──────── MODAL ──────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      width: 480px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      margin-bottom: 20px;
+      color: var(--accent);
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 13px;
+      outline: none;
+      transition: var(--transition);
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(232,255,58,.08);
+    }
+    .form-group select option { background: var(--card); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+    /* ──────── TOAST ──────── */
+    .toast-container {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 18px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 260px;
+      animation: slideIn .3s ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    }
+    .toast.success { border-left: 3px solid var(--success); }
+    .toast.error { border-left: 3px solid var(--danger); }
+    @keyframes slideIn {
+      from { transform: translateX(40px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* ──────── LOADER ──────── */
+    .loader {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-row td {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+    }
+    .empty-row td {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ──────── DASHBOARD HERO ──────── */
+    .hero-band {
+      background: linear-gradient(135deg, rgba(232,255,58,.08) 0%, rgba(58,255,212,.05) 100%);
+      border: 1px solid rgba(232,255,58,.15);
+      border-radius: 14px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .hero-band-icon { font-size: 48px; }
+    .hero-band h1 {
+      font-family: var(--font-display);
+      font-size: 36px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .hero-band p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+    /* ──────── SECTION CARD ──────── */
+    .section-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .section-card h3 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      letter-spacing: 1px;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    /* ──────── PAGINATION ──────── */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .page-btn {
+      width: 30px; height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      transition: var(--transition);
+    }
+    .page-btn:hover, .page-btn.active { border-color: var(--accent); color: var(--accent); }
+
+    /* ──────── SCROLLBAR ──────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ──────── RESPONSIVE ──────── */
+    @media (max-width: 900px) {
+      .sidebar { width: 60px; }
+      .sidebar-logo, .nav-section, .nav-item span, .sidebar-footer { display: none; }
+      .main { margin-left: 60px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .content { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─────────────────── SIDEBAR ─────────────────── -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span>СПОРТМАСТЕР+</span>
+    <small>ИС Продаж v1.0</small>
+  </div>
+
+  <span class="nav-section">Главное</span>
+  <a class="nav-item active" onclick="showSection('dashboard')" href="#">
+    <span class="nav-icon">📊</span><span>Дашборд</span>
+  </a>
+
+  <span class="nav-section">Каталог</span>
+  <a class="nav-item" onclick="showSection('products')" href="#">
+    <span class="nav-icon">👟</span><span>Товары</span>
+  </a>
+  <a class="nav-item" onclick="showSection('categories')" href="#">
+    <span class="nav-icon">🗂</span><span>Категории</span>
+  </a>
+  <a class="nav-item" onclick="showSection('suppliers')" href="#">
+    <span class="nav-icon">🏭</span><span>Поставщики</span>
+  </a>
+
+  <span class="nav-section">Продажи</span>
+  <a class="nav-item" onclick="showSection('clients')" href="#">
+    <span class="nav-icon">👤</span><span>Клиенты</span>
+  </a>
+  <a class="nav-item" onclick="showSection('orders')" href="#">
+    <span class="nav-icon">🧾</span><span>Заказы</span>
+  </a>
+  <a class="nav-item" onclick="showSection('stores')" href="#">
+    <span class="nav-icon">🏬</span><span>Магазины</span>
+  </a>
+
+  <span class="nav-section">Склад</span>
+  <a class="nav-item" onclick="showSection('inventory')" href="#">
+    <span class="nav-icon">📦</span><span>Остатки</span>
+  </a>
+
+  <div class="sidebar-footer">
+    <div class="db-status">
+      <div class="db-dot" id="dbDot"></div>
+      <span id="dbLabel">Подключение...</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ─────────────────── MAIN ─────────────────── -->
+<div class="main">
+  <div class="topbar">
+    <div class="page-title" id="pageTitle">ДАШБОРД</div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" onclick="refreshCurrent()">↺ Обновить</button>
+      <button class="btn btn-primary" id="addBtn" onclick="openAddModal()">+ Добавить</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ─── DASHBOARD ─── -->
+    <div class="section active" id="sec-dashboard">
+      <div class="hero-band">
+        <div class="hero-band-icon">🏃</div>
+        <div>
+          <h1>SPORTMASTER PLUS</h1>
+          <p>Информационная система продаж спортивных товаров · ООО «СпортМастер Плюс»</p>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Выручка 2025</div>
+          <div class="stat-value" id="dash-revenue">—</div>
+          <div class="stat-sub"><span class="stat-trend">↑ 14.1%</span> к 2024 году</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Клиенты</div>
+          <div class="stat-value" id="dash-clients">—</div>
+          <div class="stat-sub">В базе данных</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Товары</div>
+          <div class="stat-value" id="dash-products">—</div>
+          <div class="stat-sub">SKU в каталоге</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Заказы</div>
+          <div class="stat-value" id="dash-orders">—</div>
+          <div class="stat-sub">Всего в системе</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="section-card">
+          <h3>ФИНАНСОВЫЕ ПОКАЗАТЕЛИ 2023–2025</h3>
+          <table style="font-size:12px;">
+            <thead><tr>
+              <th>Показатель</th><th>2023</th><th>2024</th><th>2025</th><th>Рост</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>Выручка, тыс. ₽</td><td>487 320</td><td>562 180</td><td>641 450</td><td><span class="badge badge-green">+31.6%</span></td></tr>
+              <tr><td>Прибыль от продаж</td><td>146 196</td><td>172 535</td><td>203 260</td><td><span class="badge badge-green">+39.0%</span></td></tr>
+              <tr><td>Чистая прибыль</td><td>92 380</td><td>110 540</td><td>131 870</td><td><span class="badge badge-green">+42.7%</span></td></tr>
+              <tr><td>Численность, чел.</td><td>184</td><td>201</td><td>218</td><td><span class="badge badge-yellow">+18.5%</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="section-card">
+          <h3>ЭФФЕКТИВНОСТЬ ВНЕДРЕНИЯ ИС</h3>
+          <table style="font-size:12px;">
+            <thead><tr><th>Показатель</th><th>Значение</th></tr></thead>
+            <tbody>
+              <tr><td>Инвестиции</td><td><strong>10 000 тыс. ₽</strong></td></tr>
+              <tr><td>NPV проекта</td><td><span class="badge badge-green">190 848 тыс. ₽</span></td></tr>
+              <tr><td>Срок окупаемости</td><td><span class="badge badge-green">2 месяца</span></td></tr>
+              <tr><td>IRR</td><td><span class="badge badge-green">&gt;500%</span></td></tr>
+              <tr><td>Индекс рентабельности (PI)</td><td><strong>20.08</strong></td></tr>
+              <tr><td>Ежегодные чистые выгоды</td><td>59 916 тыс. ₽</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-card" style="margin-top:16px;">
+        <h3>ПОСЛЕДНИЕ ЗАКАЗЫ</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Клиент</th><th>Магазин</th><th>Сумма</th><th>Статус</th><th>Дата</th></tr></thead>
+            <tbody id="dashOrders">
+              <tr class="loading-row"><td colspan="6"><span class="loader"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PRODUCTS ─── -->
+    <div class="section" id="sec-products">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Поиск по товарам..." oninput="filterTable(this,'tblProducts')" />
+        </div>
+        <div style="display:flex;gap:8px;">
+          <select class="btn btn-ghost" id="catFilter" onchange="loadProducts()" style="cursor:pointer;">
+            <option value="">Все категории</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Артикул</th><th>Наименование</th><th>Бренд</th><th>Категория</th>
+            <th>Размер</th><th>Цвет</th><th>Цена, ₽</th><th>Статус</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="tblProducts">
+            <tr class="loading-row"><td colspan="9"><span class="loader"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagProducts"></div>
+    </div>
+
+    <!-- ─── CATEGORIES ─── -->
+    <div class="section" id="sec-categories">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Поиск..." oninput="filterTable(this,'tblCategories')" />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Название</th><th>Родительская</th><th>Описание</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="tblCategories">
+            <tr class="loading-row"><td colspan="5"><span class="loader"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── SUPPLIERS ─── -->
+    <div class="section" id="sec-suppliers">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Поиск..." oninput="filterTable(this,'tblSuppliers')" />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Компания</th><th>ИНН</th><th>Контакт</th><th>Email</th>
+            <th>Телефон</th><th>Рейтинг</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="tblSuppliers">
+            <tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── CLIENTS ─── -->
+    <div class="section" id="sec-clients">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Поиск по ФИО, email..." oninput="filterTable(this,'tblClients')" />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>ФИО</th><th>Email</th><th>Телефон</th><th>Дата рождения</th>
+            <th>Бонусы</th><th>Уровень</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="tblClients">
+            <tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── ORDERS ─── -->
+    <div class="section" id="sec-orders">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Поиск..." oninput="filterTable(this,'tblOrders')" />
+        </div>
+        <select class="btn btn-ghost" id="statusFilter" onchange="loadOrders()" style="cursor:pointer;">
+          <option value="">Все статусы</option>
+          <option value="new">Новый</option>
+          <option value="processing">В обработке</option>
+          <option value="completed">Выполнен</option>
+          <option value="cancelled">Отменён</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Номер</th><th>Клиент</th><th>Магазин</th><th>Канал</th>
+            <th>Сумма, ₽</th><th>Оплата</th><th>Статус</th><th>Дата</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="tblOrders">
+            <tr class="loading-row"><td colspan="9"><span class="loader"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagOrders"></div>
+    </div>
+
+    <!-- ─── STORES ─── -->
+    <div class="section" id="sec-stores">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Поиск..." oninput="filterTable(this,'tblStores')" />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Название</th><th>Город</th><th>Адрес</th>
+            <th>Площадь м²</th><th>Менеджер</th><th>Статус</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="tblStores">
+            <tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── INVENTORY ─── -->
+    <div class="section" id="sec-inventory">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Поиск..." oninput="filterTable(this,'tblInventory')" />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Товар</th><th>Магазин</th><th>Остаток</th>
+            <th>Резерв</th><th>Мин. остаток</th><th>Обновлено</th><th>Статус</th>
+          </tr></thead>
+          <tbody id="tblInventory">
+            <tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ─────────────────── MODALS ─────────────────── -->
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="modalProduct">
+  <div class="modal">
+    <div class="modal-title" id="modalProductTitle">НОВЫЙ ТОВАР</div>
+    <input type="hidden" id="productId" />
+    <div class="form-row">
+      <div class="form-group">
+        <label>Артикул *</label>
+        <input type="text" id="fArticul" placeholder="ART-001" />
+      </div>
+      <div class="form-group">
+        <label>Бренд *</label>
+        <input type="text" id="fBrand" placeholder="Nike" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Наименование *</label>
+      <input type="text" id="fName" placeholder="Кроссовки беговые Air Max" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Категория</label>
+        <select id="fCategory"></select>
+      </div>
+      <div class="form-group">
+        <label>Размер</label>
+        <input type="text" id="fSize" placeholder="42" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Цвет</label>
+        <input type="text" id="fColor" placeholder="Чёрный/белый" />
+      </div>
+      <div class="form-group">
+        <label>Розничная цена, ₽ *</label>
+        <input type="number" id="fPrice" placeholder="5990" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Закупочная цена, ₽</label>
+        <input type="number" id="fCostPrice" placeholder="3200" />
+      </div>
+      <div class="form-group">
+        <label>Статус</label>
+        <select id="fStatus">
+          <option value="active">Активный</option>
+          <option value="inactive">Неактивный</option>
+          <option value="discontinued">Снят с продажи</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Описание</label>
+      <textarea id="fDesc" rows="2" placeholder="Краткое описание..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalProduct')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Client Modal -->
+<div class="modal-overlay" id="modalClient">
+  <div class="modal">
+    <div class="modal-title" id="modalClientTitle">НОВЫЙ КЛИЕНТ</div>
+    <input type="hidden" id="clientId" />
+    <div class="form-row">
+      <div class="form-group">
+        <label>Имя *</label>
+        <input type="text" id="cFirstName" placeholder="Иван" />
+      </div>
+      <div class="form-group">
+        <label>Фамилия *</label>
+        <input type="text" id="cLastName" placeholder="Иванов" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="cEmail" placeholder="ivan@example.com" />
+      </div>
+      <div class="form-group">
+        <label>Телефон</label>
+        <input type="tel" id="cPhone" placeholder="+7 999 000 00 00" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Дата рождения</label>
+        <input type="date" id="cBirthdate" />
+      </div>
+      <div class="form-group">
+        <label>Уровень лояльности</label>
+        <select id="cLoyalty">
+          <option value="standard">Стандарт</option>
+          <option value="silver">Серебро</option>
+          <option value="gold">Золото</option>
+          <option value="platinum">Платина</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Бонусные баллы</label>
+      <input type="number" id="cBonus" value="0" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalClient')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveClient()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Modal -->
+<div class="modal-overlay" id="modalOrder">
+  <div class="modal">
+    <div class="modal-title" id="modalOrderTitle">НОВЫЙ ЗАКАЗ</div>
+    <input type="hidden" id="orderId" />
+    <div class="form-row">
+      <div class="form-group">
+        <label>Клиент *</label>
+        <select id="oClient"></select>
+      </div>
+      <div class="form-group">
+        <label>Магазин *</label>
+        <select id="oStore"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Канал продаж</label>
+        <select id="oChannel">
+          <option value="offline">Офлайн магазин</option>
+          <option value="online">Интернет-магазин</option>
+          <option value="mobile">Мобильное приложение</option>
+          <option value="marketplace">Маркетплейс</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Способ оплаты</label>
+        <select id="oPayment">
+          <option value="cash">Наличные</option>
+          <option value="card">Банковская карта</option>
+          <option value="online">Онлайн-оплата</option>
+          <option value="credit">Рассрочка</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Сумма, ₽ *</label>
+        <input type="number" id="oAmount" placeholder="5990" />
+      </div>
+      <div class="form-group">
+        <label>Статус</label>
+        <select id="oStatus">
+          <option value="new">Новый</option>
+          <option value="processing">В обработке</option>
+          <option value="completed">Выполнен</option>
+          <option value="cancelled">Отменён</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalOrder')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveOrder()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Modal -->
+<div class="modal-overlay" id="modalCategory">
+  <div class="modal">
+    <div class="modal-title">КАТЕГОРИЯ</div>
+    <input type="hidden" id="categoryId" />
+    <div class="form-group">
+      <label>Название *</label>
+      <input type="text" id="catName" placeholder="Беговые кроссовки" />
+    </div>
+    <div class="form-group">
+      <label>Родительская категория</label>
+      <select id="catParent">
+        <option value="">— Корневая —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Описание</label>
+      <textarea id="catDesc" rows="2"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalCategory')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveCategory()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Supplier Modal -->
+<div class="modal-overlay" id="modalSupplier">
+  <div class="modal">
+    <div class="modal-title">ПОСТАВЩИК</div>
+    <input type="hidden" id="supplierId" />
+    <div class="form-group">
+      <label>Компания *</label>
+      <input type="text" id="sCompany" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ИНН</label>
+        <input type="text" id="sInn" />
+      </div>
+      <div class="form-group">
+        <label>Рейтинг (1-5)</label>
+        <input type="number" id="sRating" min="1" max="5" step="0.1" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Контактное лицо</label>
+        <input type="text" id="sContact" />
+      </div>
+      <div class="form-group">
+        <label>Телефон</label>
+        <input type="tel" id="sPhone" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="sEmail" />
+    </div>
+    <div class="form-group">
+      <label>Адрес</label>
+      <input type="text" id="sAddress" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalSupplier')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveSupplier()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Store Modal -->
+<div class="modal-overlay" id="modalStore">
+  <div class="modal">
+    <div class="modal-title">МАГАЗИН</div>
+    <input type="hidden" id="storeId" />
+    <div class="form-group">
+      <label>Название *</label>
+      <input type="text" id="stName" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Город *</label>
+        <input type="text" id="stCity" />
+      </div>
+      <div class="form-group">
+        <label>Площадь, м²</label>
+        <input type="number" id="stArea" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Адрес *</label>
+      <input type="text" id="stAddress" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Менеджер</label>
+        <input type="text" id="stManager" />
+      </div>
+      <div class="form-group">
+        <label>Телефон</label>
+        <input type="tel" id="stPhone" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Статус</label>
+      <select id="stStatus">
+        <option value="active">Работает</option>
+        <option value="renovation">Ремонт</option>
+        <option value="closed">Закрыт</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalStore')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveStore()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  SUPABASE CONFIG
+//  ⚠️  Замените YOUR_SUPABASE_URL и YOUR_ANON_KEY
+// ══════════════════════════════════════════════
+const SUPABASE_URL  = 'https://cfsljezbkudsczrlvorq.supabase.co';
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmc2xqZXpia3Vkc2N6cmx2b3JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMTIxMDMsImV4cCI6MjA5Mzc4ODEwM30.C62xy-8p9Lg53B1P9jQpEt6jbmzkddkE2EEfgFHZqNo';
+
+let sb;
+let currentSection = 'dashboard';
+let allCategoriesCache = [];
+let allClientsCache = [];
+let allStoresCache = [];
+
+// ── INIT ──
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    sb = supabase.createClient('https://cfsljezbkudsczrlvorq.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmc2xqZXpia3Vkc2N6cmx2b3JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMTIxMDMsImV4cCI6MjA5Mzc4ODEwM30.C62xy-8p9Lg53B1P9jQpEt6jbmzkddkE2EEfgFHZqNo');
+    const { error } = await sb.from('stores').select('id').limit(1);
+    setDbStatus(!error);
+  } catch(e) {
+    setDbStatus(false);
+  }
+  loadSection('dashboard');
+});
+
+function setDbStatus(ok) {
+  const dot = document.getElementById('dbDot');
+  const lbl = document.getElementById('dbLabel');
+  dot.className = 'db-dot ' + (ok ? 'connected' : 'error');
+  lbl.textContent = ok ? 'Supabase OK' : 'Нет подключения';
+}
+
+// ── NAVIGATION ──
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item')[
+    ['dashboard','products','categories','suppliers','clients','orders','stores','inventory']
+      .indexOf(name) + 1
+  ].classList.add('active');
+  currentSection = name;
+  document.getElementById('pageTitle').textContent = {
+    dashboard:'ДАШБОРД', products:'ТОВАРЫ', categories:'КАТЕГОРИИ',
+    suppliers:'ПОСТАВЩИКИ', clients:'КЛИЕНТЫ', orders:'ЗАКАЗЫ',
+    stores:'МАГАЗИНЫ', inventory:'СКЛАДСКИЕ ОСТАТКИ'
+  }[name];
+  document.getElementById('addBtn').style.display =
+    name === 'dashboard' || name === 'inventory' ? 'none' : 'flex';
+  loadSection(name);
+}
+
+function loadSection(name) {
+  const map = {
+    dashboard: loadDashboard,
+    products: loadProducts,
+    categories: loadCategories,
+    suppliers: loadSuppliers,
+    clients: loadClients,
+    orders: loadOrders,
+    stores: loadStores,
+    inventory: loadInventory,
+  };
+  if(map[name]) map[name]();
+}
+
+function refreshCurrent() { loadSection(currentSection); }
+function openAddModal() {
+  const map = {
+    products:'modalProduct', categories:'modalCategory',
+    suppliers:'modalSupplier', clients:'modalClient',
+    orders:'modalOrder', stores:'modalStore',
+  };
+  if(map[currentSection]) {
+    clearModal(map[currentSection]);
+    openModal(map[currentSection]);
+  }
+}
+
+// ── UTILS ──
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function clearModal(id) {
+  document.getElementById(id).querySelectorAll('input,textarea').forEach(el => el.value = '');
+  document.getElementById(id).querySelectorAll('select').forEach(el => el.selectedIndex = 0);
+  const hiddens = document.getElementById(id).querySelectorAll('input[type=hidden]');
+  hiddens.forEach(h => h.value = '');
+}
+
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${type==='success'?'✓':'✕'}</span><span>${msg}</span>`;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function statusBadge(s) {
+  const map = {
+    active: ['badge-green','Активный'], inactive: ['badge-yellow','Неактивный'],
+    discontinued: ['badge-red','Снят'], new: ['badge-blue','Новый'],
+    processing: ['badge-yellow','В обработке'], completed: ['badge-green','Выполнен'],
+    cancelled: ['badge-red','Отменён'], standard: ['badge-blue','Стандарт'],
+    silver: ['','Серебро'], gold: ['badge-yellow','Золото'],
+    platinum: ['badge-green','Платина'], renovation: ['badge-yellow','Ремонт'],
+    closed: ['badge-red','Закрыт'],
+  };
+  const [cls, label] = map[s] || ['','—'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function filterTable(input, tbodyId) {
+  const val = input.value.toLowerCase();
+  document.querySelectorAll(`#${tbodyId} tr`).forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(val) ? '' : 'none';
+  });
+}
+
+function fmt(n) { return Number(n).toLocaleString('ru'); }
+function fmtDate(d) { if(!d) return '—'; return new Date(d).toLocaleDateString('ru'); }
+
+// ══════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const [{ count: cc }, { count: pc }, { count: oc }, orders] = await Promise.all([
+      sb.from('clients').select('*', {count:'exact',head:true}),
+      sb.from('products').select('*', {count:'exact',head:true}),
+      sb.from('orders').select('*', {count:'exact',head:true}),
+      sb.from('orders').select('id, total_amount, status, created_at, clients(first_name,last_name), stores(name)').order('created_at',{ascending:false}).limit(8),
+    ]);
+    document.getElementById('dash-revenue').textContent = '641 450';
+    document.getElementById('dash-clients').textContent = cc ?? '—';
+    document.getElementById('dash-products').textContent = pc ?? '—';
+    document.getElementById('dash-orders').textContent = oc ?? '—';
+
+    const tb = document.getElementById('dashOrders');
+    if(!orders.data?.length) {
+      tb.innerHTML = '<tr class="empty-row"><td colspan="6">Заказов нет</td></tr>'; return;
+    }
+    tb.innerHTML = orders.data.map(o => `
+      <tr>
+        <td><strong>#${o.id}</strong></td>
+        <td>${o.clients ? o.clients.first_name+' '+o.clients.last_name : '—'}</td>
+        <td>${o.stores?.name ?? '—'}</td>
+        <td>${fmt(o.total_amount)} ₽</td>
+        <td>${statusBadge(o.status)}</td>
+        <td>${fmtDate(o.created_at)}</td>
+      </tr>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+// ══════════════════════════════════════════════
+//  PRODUCTS
+// ══════════════════════════════════════════════
+async function loadProducts() {
+  const tb = document.getElementById('tblProducts');
+  tb.innerHTML = '<tr class="loading-row"><td colspan="9"><span class="loader"></span></td></tr>';
+  try {
+    const catId = document.getElementById('catFilter').value;
+    let q = sb.from('products')
+      .select('*, categories(name)')
+      .order('name');
+    if(catId) q = q.eq('category_id', catId);
+    const { data, error } = await q;
+    if(error) throw error;
+    if(!data.length) {
+      tb.innerHTML = '<tr class="empty-row"><td colspan="9">Товары не найдены</td></tr>'; return;
+    }
+    tb.innerHTML = data.map(p => `
+      <tr>
+        <td><code>${p.articul}</code></td>
+        <td><strong>${p.name}</strong></td>
+        <td>${p.brand ?? '—'}</td>
+        <td>${p.categories?.name ?? '—'}</td>
+        <td>${p.size ?? '—'}</td>
+        <td>${p.color ?? '—'}</td>
+        <td><strong>${fmt(p.price)}</strong></td>
+        <td>${statusBadge(p.status)}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick="editProduct(${JSON.stringify(p).replace(/"/g,'&quot;')})">✏️</button>
+          <button class="icon-btn del" onclick="deleteRow('products',${p.id},'loadProducts')">🗑</button>
+        </div></td>
+      </tr>`).join('');
+    // fill cat filter
+    const cats = document.getElementById('catFilter');
+    if(cats.options.length === 1) {
+      allCategoriesCache.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name;
+        cats.appendChild(o);
+      });
+    }
+  } catch(e) { tb.innerHTML = `<tr class="empty-row"><td colspan="9">Ошибка: ${e.message}</td></tr>`; }
+}
+
+function editProduct(p) {
+  document.getElementById('modalProductTitle').textContent = 'РЕДАКТИРОВАТЬ ТОВАР';
+  document.getElementById('productId').value = p.id;
+  document.getElementById('fArticul').value = p.articul;
+  document.getElementById('fName').value = p.name;
+  document.getElementById('fBrand').value = p.brand ?? '';
+  document.getElementById('fSize').value = p.size ?? '';
+  document.getElementById('fColor').value = p.color ?? '';
+  document.getElementById('fPrice').value = p.price;
+  document.getElementById('fCostPrice').value = p.cost_price ?? '';
+  document.getElementById('fDesc').value = p.description ?? '';
+  document.getElementById('fStatus').value = p.status ?? 'active';
+  loadCatOptions('fCategory', p.category_id);
+  openModal('modalProduct');
+}
+
+async function saveProduct() {
+  const id = document.getElementById('productId').value;
+  const articul = document.getElementById('fArticul').value.trim();
+  const name    = document.getElementById('fName').value.trim();
+  const price   = document.getElementById('fPrice').value;
+  if(!articul || !name || !price) { toast('Заполните обязательные поля','error'); return; }
+  const payload = {
+    articul, name, price: +price,
+    brand: document.getElementById('fBrand').value.trim() || null,
+    size:  document.getElementById('fSize').value.trim() || null,
+    color: document.getElementById('fColor').value.trim() || null,
+    cost_price: +document.getElementById('fCostPrice').value || null,
+    description: document.getElementById('fDesc').value.trim() || null,
+    status: document.getElementById('fStatus').value,
+    category_id: +document.getElementById('fCategory').value || null,
+  };
+  const { error } = id
+    ? await sb.from('products').update(payload).eq('id',id)
+    : await sb.from('products').insert(payload);
+  if(error) { toast('Ошибка: '+error.message,'error'); return; }
+  toast(id ? 'Товар обновлён' : 'Товар добавлен');
+  closeModal('modalProduct');
+  loadProducts();
+}
+
+// ══════════════════════════════════════════════
+//  CATEGORIES
+// ══════════════════════════════════════════════
+async function loadCategories() {
+  const tb = document.getElementById('tblCategories');
+  tb.innerHTML = '<tr class="loading-row"><td colspan="5"><span class="loader"></span></td></tr>';
+  try {
+    const { data, error } = await sb.from('categories').select('*').order('name');
+    if(error) throw error;
+    allCategoriesCache = data || [];
+    if(!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="5">Нет категорий</td></tr>'; return; }
+    const map = Object.fromEntries(data.map(c => [c.id, c.name]));
+    tb.innerHTML = data.map(c => `
+      <tr>
+        <td>${c.id}</td>
+        <td><strong>${c.name}</strong></td>
+        <td>${c.parent_id ? map[c.parent_id] ?? '—' : '<em style="color:var(--muted)">Корневая</em>'}</td>
+        <td style="color:var(--muted)">${c.description ?? '—'}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick='editCategory(${JSON.stringify(c).replace(/"/g,"&quot;")})'>✏️</button>
+          <button class="icon-btn del" onclick="deleteRow('categories',${c.id},'loadCategories')">🗑</button>
+        </div></td>
+      </tr>`).join('');
+  } catch(e) { tb.innerHTML = `<tr class="empty-row"><td colspan="5">Ошибка: ${e.message}</td></tr>`; }
+}
+
+function editCategory(c) {
+  document.getElementById('categoryId').value = c.id;
+  document.getElementById('catName').value = c.name;
+  document.getElementById('catDesc').value = c.description ?? '';
+  loadCatOptions('catParent', c.parent_id, true);
+  openModal('modalCategory');
+}
+
+async function saveCategory() {
+  const id   = document.getElementById('categoryId').value;
+  const name = document.getElementById('catName').value.trim();
+  if(!name) { toast('Введите название','error'); return; }
+  const payload = {
+    name,
+    description: document.getElementById('catDesc').value.trim() || null,
+    parent_id: +document.getElementById('catParent').value || null,
+  };
+  const { error } = id
+    ? await sb.from('categories').update(payload).eq('id',id)
+    : await sb.from('categories').insert(payload);
+  if(error) { toast('Ошибка: '+error.message,'error'); return; }
+  toast('Категория сохранена');
+  closeModal('modalCategory');
+  loadCategories();
+}
+
+async function loadCatOptions(selectId, selectedId, withEmpty=false) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = withEmpty ? '<option value="">— Нет —</option>' : '';
+  allCategoriesCache.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.name;
+    if(c.id === selectedId) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+// ══════════════════════════════════════════════
+//  SUPPLIERS
+// ══════════════════════════════════════════════
+async function loadSuppliers() {
+  const tb = document.getElementById('tblSuppliers');
+  tb.innerHTML = '<tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>';
+  try {
+    const { data, error } = await sb.from('suppliers').select('*').order('company_name');
+    if(error) throw error;
+    if(!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Поставщиков нет</td></tr>'; return; }
+    tb.innerHTML = data.map(s => `
+      <tr>
+        <td>${s.id}</td>
+        <td><strong>${s.company_name}</strong></td>
+        <td><code>${s.inn ?? '—'}</code></td>
+        <td>${s.contact_person ?? '—'}</td>
+        <td>${s.email ?? '—'}</td>
+        <td>${s.phone ?? '—'}</td>
+        <td>${s.rating ? '⭐ '+s.rating : '—'}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick='editSupplier(${JSON.stringify(s).replace(/"/g,"&quot;")})'>✏️</button>
+          <button class="icon-btn del" onclick="deleteRow('suppliers',${s.id},'loadSuppliers')">🗑</button>
+        </div></td>
+      </tr>`).join('');
+  } catch(e) { tb.innerHTML = `<tr class="empty-row"><td colspan="8">Ошибка: ${e.message}</td></tr>`; }
+}
+
+function editSupplier(s) {
+  document.getElementById('supplierId').value = s.id;
+  document.getElementById('sCompany').value = s.company_name;
+  document.getElementById('sInn').value = s.inn ?? '';
+  document.getElementById('sContact').value = s.contact_person ?? '';
+  document.getElementById('sPhone').value = s.phone ?? '';
+  document.getElementById('sEmail').value = s.email ?? '';
+  document.getElementById('sAddress').value = s.address ?? '';
+  document.getElementById('sRating').value = s.rating ?? '';
+  openModal('modalSupplier');
+}
+
+async function saveSupplier() {
+  const id = document.getElementById('supplierId').value;
+  const company = document.getElementById('sCompany').value.trim();
+  if(!company) { toast('Введите название компании','error'); return; }
+  const payload = {
+    company_name: company,
+    inn: document.getElementById('sInn').value.trim() || null,
+    contact_person: document.getElementById('sContact').value.trim() || null,
+    phone: document.getElementById('sPhone').value.trim() || null,
+    email: document.getElementById('sEmail').value.trim() || null,
+    address: document.getElementById('sAddress').value.trim() || null,
+    rating: +document.getElementById('sRating').value || null,
+  };
+  const { error } = id
+    ? await sb.from('suppliers').update(payload).eq('id',id)
+    : await sb.from('suppliers').insert(payload);
+  if(error) { toast('Ошибка: '+error.message,'error'); return; }
+  toast('Поставщик сохранён');
+  closeModal('modalSupplier');
+  loadSuppliers();
+}
+
+// ══════════════════════════════════════════════
+//  CLIENTS
+// ══════════════════════════════════════════════
+async function loadClients() {
+  const tb = document.getElementById('tblClients');
+  tb.innerHTML = '<tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>';
+  try {
+    const { data, error } = await sb.from('clients').select('*').order('last_name');
+    if(error) throw error;
+    allClientsCache = data || [];
+    if(!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Клиентов нет</td></tr>'; return; }
+    tb.innerHTML = data.map(c => `
+      <tr>
+        <td>${c.id}</td>
+        <td><strong>${c.last_name} ${c.first_name}</strong></td>
+        <td>${c.email}</td>
+        <td>${c.phone ?? '—'}</td>
+        <td>${fmtDate(c.birthdate)}</td>
+        <td>${fmt(c.bonus_points ?? 0)} бонусов</td>
+        <td>${statusBadge(c.loyalty_level ?? 'standard')}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick='editClient(${JSON.stringify(c).replace(/"/g,"&quot;")})'>✏️</button>
+          <button class="icon-btn del" onclick="deleteRow('clients',${c.id},'loadClients')">🗑</button>
+        </div></td>
+      </tr>`).join('');
+  } catch(e) { tb.innerHTML = `<tr class="empty-row"><td colspan="8">Ошибка: ${e.message}</td></tr>`; }
+}
+
+function editClient(c) {
+  document.getElementById('clientId').value = c.id;
+  document.getElementById('cFirstName').value = c.first_name;
+  document.getElementById('cLastName').value = c.last_name;
+  document.getElementById('cEmail').value = c.email;
+  document.getElementById('cPhone').value = c.phone ?? '';
+  document.getElementById('cBirthdate').value = c.birthdate ?? '';
+  document.getElementById('cBonus').value = c.bonus_points ?? 0;
+  document.getElementById('cLoyalty').value = c.loyalty_level ?? 'standard';
+  document.getElementById('modalClientTitle').textContent = 'РЕДАКТИРОВАТЬ КЛИЕНТА';
+  openModal('modalClient');
+}
+
+async function saveClient() {
+  const id = document.getElementById('clientId').value;
+  const fn = document.getElementById('cFirstName').value.trim();
+  const ln = document.getElementById('cLastName').value.trim();
+  const em = document.getElementById('cEmail').value.trim();
+  if(!fn||!ln||!em) { toast('Заполните обязательные поля','error'); return; }
+  const payload = {
+    first_name: fn, last_name: ln, email: em,
+    phone: document.getElementById('cPhone').value.trim() || null,
+    birthdate: document.getElementById('cBirthdate').value || null,
+    bonus_points: +document.getElementById('cBonus').value || 0,
+    loyalty_level: document.getElementById('cLoyalty').value,
+  };
+  const { error } = id
+    ? await sb.from('clients').update(payload).eq('id',id)
+    : await sb.from('clients').insert(payload);
+  if(error) { toast('Ошибка: '+error.message,'error'); return; }
+  toast('Клиент сохранён');
+  closeModal('modalClient');
+  loadClients();
+}
+
+// ══════════════════════════════════════════════
+//  ORDERS
+// ══════════════════════════════════════════════
+async function loadOrders() {
+  const tb = document.getElementById('tblOrders');
+  tb.innerHTML = '<tr class="loading-row"><td colspan="9"><span class="loader"></span></td></tr>';
+  try {
+    const sf = document.getElementById('statusFilter').value;
+    let q = sb.from('orders')
+      .select('*, clients(first_name,last_name), stores(name)')
+      .order('created_at',{ascending:false});
+    if(sf) q = q.eq('status',sf);
+    const { data, error } = await q;
+    if(error) throw error;
+    if(!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">Заказов нет</td></tr>'; return; }
+    const payMap = { cash:'Наличные', card:'Карта', online:'Онлайн', credit:'Рассрочка' };
+    const chanMap = { offline:'Магазин', online:'Онлайн', mobile:'Мобайл', marketplace:'Маркетплейс' };
+    tb.innerHTML = data.map(o => `
+      <tr>
+        <td><strong>#${o.id}</strong></td>
+        <td>${o.clients ? o.clients.last_name+' '+o.clients.first_name[0]+'.' : '—'}</td>
+        <td>${o.stores?.name ?? '—'}</td>
+        <td>${chanMap[o.channel] ?? o.channel}</td>
+        <td><strong>${fmt(o.total_amount)}</strong></td>
+        <td>${payMap[o.payment_method] ?? o.payment_method}</td>
+        <td>${statusBadge(o.status)}</td>
+        <td>${fmtDate(o.created_at)}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick='editOrder(${JSON.stringify(o).replace(/"/g,"&quot;")})'>✏️</button>
+          <button class="icon-btn del" onclick="deleteRow('orders',${o.id},'loadOrders')">🗑</button>
+        </div></td>
+      </tr>`).join('');
+    // populate selects
+    fillClientSelect();
+    fillStoreSelect();
+  } catch(e) { tb.innerHTML = `<tr class="empty-row"><td colspan="9">Ошибка: ${e.message}</td></tr>`; }
+}
+
+function editOrder(o) {
+  document.getElementById('orderId').value = o.id;
+  document.getElementById('oAmount').value = o.total_amount;
+  document.getElementById('oStatus').value = o.status;
+  document.getElementById('oChannel').value = o.channel ?? 'offline';
+  document.getElementById('oPayment').value = o.payment_method ?? 'cash';
+  fillClientSelect(o.client_id);
+  fillStoreSelect(o.store_id);
+  document.getElementById('modalOrderTitle').textContent = 'РЕДАКТИРОВАТЬ ЗАКАЗ';
+  openModal('modalOrder');
+}
+
+function fillClientSelect(selId) {
+  const sel = document.getElementById('oClient');
+  sel.innerHTML = '';
+  allClientsCache.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = c.last_name+' '+c.first_name;
+    if(c.id === selId) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function fillStoreSelect(selId) {
+  const sel = document.getElementById('oStore');
+  sel.innerHTML = '';
+  allStoresCache.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.name;
+    if(s.id === selId) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+async function saveOrder() {
+  const id = document.getElementById('orderId').value;
+  const amount = document.getElementById('oAmount').value;
+  if(!amount) { toast('Введите сумму','error'); return; }
+  const payload = {
+    client_id: +document.getElementById('oClient').value || null,
+    store_id: +document.getElementById('oStore').value || null,
+    total_amount: +amount,
+    status: document.getElementById('oStatus').value,
+    channel: document.getElementById('oChannel').value,
+    payment_method: document.getElementById('oPayment').value,
+  };
+  const { error } = id
+    ? await sb.from('orders').update(payload).eq('id',id)
+    : await sb.from('orders').insert(payload);
+  if(error) { toast('Ошибка: '+error.message,'error'); return; }
+  toast('Заказ сохранён');
+  closeModal('modalOrder');
+  loadOrders();
+}
+
+// ══════════════════════════════════════════════
+//  STORES
+// ══════════════════════════════════════════════
+async function loadStores() {
+  const tb = document.getElementById('tblStores');
+  tb.innerHTML = '<tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>';
+  try {
+    const { data, error } = await sb.from('stores').select('*').order('city');
+    if(error) throw error;
+    allStoresCache = data || [];
+    if(!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Магазинов нет</td></tr>'; return; }
+    tb.innerHTML = data.map(s => `
+      <tr>
+        <td>${s.id}</td>
+        <td><strong>${s.name}</strong></td>
+        <td>${s.city}</td>
+        <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.address}</td>
+        <td>${s.area ? s.area+' м²' : '—'}</td>
+        <td>${s.manager ?? '—'}</td>
+        <td>${statusBadge(s.status ?? 'active')}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick='editStore(${JSON.stringify(s).replace(/"/g,"&quot;")})'>✏️</button>
+          <button class="icon-btn del" onclick="deleteRow('stores',${s.id},'loadStores')">🗑</button>
+        </div></td>
+      </tr>`).join('');
+  } catch(e) { tb.innerHTML = `<tr class="empty-row"><td colspan="8">Ошибка: ${e.message}</td></tr>`; }
+}
+
+function editStore(s) {
+  document.getElementById('storeId').value = s.id;
+  document.getElementById('stName').value = s.name;
+  document.getElementById('stCity').value = s.city;
+  document.getElementById('stAddress').value = s.address;
+  document.getElementById('stArea').value = s.area ?? '';
+  document.getElementById('stManager').value = s.manager ?? '';
+  document.getElementById('stPhone').value = s.phone ?? '';
+  document.getElementById('stStatus').value = s.status ?? 'active';
+  openModal('modalStore');
+}
+
+async function saveStore() {
+  const id = document.getElementById('storeId').value;
+  const name = document.getElementById('stName').value.trim();
+  const city = document.getElementById('stCity').value.trim();
+  const addr = document.getElementById('stAddress').value.trim();
+  if(!name||!city||!addr) { toast('Заполните обязательные поля','error'); return; }
+  const payload = {
+    name, city, address: addr,
+    area: +document.getElementById('stArea').value || null,
+    manager: document.getElementById('stManager').value.trim() || null,
+    phone: document.getElementById('stPhone').value.trim() || null,
+    status: document.getElementById('stStatus').value,
+  };
+  const { error } = id
+    ? await sb.from('stores').update(payload).eq('id',id)
+    : await sb.from('stores').insert(payload);
+  if(error) { toast('Ошибка: '+error.message,'error'); return; }
+  toast('Магазин сохранён');
+  closeModal('modalStore');
+  loadStores();
+}
+
+// ══════════════════════════════════════════════
+//  INVENTORY
+// ══════════════════════════════════════════════
+async function loadInventory() {
+  const tb = document.getElementById('tblInventory');
+  tb.innerHTML = '<tr class="loading-row"><td colspan="8"><span class="loader"></span></td></tr>';
+  try {
+    const { data, error } = await sb.from('inventory')
+      .select('*, products(name,articul), stores(name)')
+      .order('updated_at', {ascending:false});
+    if(error) throw error;
+    if(!data.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Нет данных</td></tr>'; return; }
+    tb.innerHTML = data.map(r => {
+      const avail = (r.quantity ?? 0) - (r.reserved ?? 0);
+      const badge = avail <= 0 ? 'badge-red' : avail < (r.min_quantity ?? 3) ? 'badge-yellow' : 'badge-green';
+      const label = avail <= 0 ? 'Нет в наличии' : avail < (r.min_quantity ?? 3) ? 'Мало' : 'В наличии';
+      return `<tr>
+        <td>${r.id}</td>
+        <td>${r.products ? '<strong>'+r.products.name+'</strong><br><code style="font-size:11px">'+r.products.articul+'</code>' : '—'}</td>
+        <td>${r.stores?.name ?? '—'}</td>
+        <td><strong>${r.quantity ?? 0}</strong> шт.</td>
+        <td>${r.reserved ?? 0} шт.</td>
+        <td>${r.min_quantity ?? '—'}</td>
+        <td style="color:var(--muted)">${fmtDate(r.updated_at)}</td>
+        <td><span class="badge ${badge}">${label}</span></td>
+      </tr>`;
+    }).join('');
+  } catch(e) { tb.innerHTML = `<tr class="empty-row"><td colspan="8">Ошибка: ${e.message}</td></tr>`; }
+}
+
+// ── UNIVERSAL DELETE ──
+async function deleteRow(table, id, reloadFn) {
+  if(!confirm('Удалить запись #'+id+'?')) return;
+  const { error } = await sb.from(table).delete().eq('id',id);
+  if(error) { toast('Ошибка удаления: '+error.message,'error'); return; }
+  toast('Запись удалена');
+  window[reloadFn]();
+}
+
+// close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if(e.target === o) o.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
